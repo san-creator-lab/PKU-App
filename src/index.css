@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* keyboard/switch-access users get a clear focus ring everywhere */
+  :focus-visible {
+    outline: 3px solid #00d4ff;
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  body {
+    @apply bg-navy-900 font-body text-slate-100 antialiased;
+    overscroll-behavior-y: contain;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display font-semibold;
+  }
+
+  /* Large-text accessibility option toggled from settings */
+  html.text-lg-mode {
+    font-size: 112.5%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply rounded-card border border-white/10 bg-white/5 shadow-card backdrop-blur-md;
+  }
+
+  .btn-hero {
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-hero bg-electric-500 px-6 py-3 font-display text-lg font-semibold text-navy-950 transition active:scale-95 disabled:opacity-40;
+  }
+
+  .btn-gold {
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-hero bg-gold-500 px-6 py-3 font-display text-lg font-semibold text-navy-950 transition active:scale-95 disabled:opacity-40;
+  }
+
+  .btn-ghost {
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-hero border border-white/15 bg-white/5 px-6 py-3 font-display text-lg font-medium text-slate-100 transition active:scale-95 disabled:opacity-40;
+  }
+
+  .input-hero {
+    @apply block w-full rounded-hero border border-white/15 bg-navy-800 px-4 py-3 text-lg text-slate-100 placeholder:text-slate-400 focus:border-electric-500 focus:outline-none focus:ring-2 focus:ring-electric-500/40;
+    min-height: 48px;
+  }
+
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+  }
+}

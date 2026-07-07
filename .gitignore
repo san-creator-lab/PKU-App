@@ -1,0 +1,12 @@
+node_modules
+dist
+dev-dist
+*.local
+.env
+.DS_Store
+supabase/.temp
+supabase/.branches
+test-results
+# copied from node_modules by scripts/copy-ocr-assets.mjs (predev/prebuild)
+public/tesseract
+public/tessdata

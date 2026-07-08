@@ -10,3 +10,4 @@ test-results
 # copied from node_modules by scripts/copy-ocr-assets.mjs (predev/prebuild)
 public/tesseract
 public/tessdata
+dist-artifact

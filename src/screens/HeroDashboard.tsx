@@ -4,12 +4,14 @@ import { useNavigate } from 'react-router-dom'
 import { ChallengeCard } from '@/components/ChallengeCard'
 import { HeroAvatar, type AvatarState } from '@/components/HeroAvatar'
 import { MealCard } from '@/components/MealCard'
+import { MissionsPanel } from '@/components/MissionsPanel'
 import { PowerMeter } from '@/components/PowerMeter'
 import { SpeechBubble } from '@/components/SpeechBubble'
 import { StreakFlame } from '@/components/StreakFlame'
 import { heroProfileOf, useAppStore } from '@/hooks/useAppStore'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { todayISO } from '@/lib/dates'
+import { parseGear } from '@/lib/economy'
 import { dayTotal, zoneFor } from '@/lib/gamification'
 import { t } from '@/lib/i18n'
 
@@ -74,7 +76,10 @@ export function HeroDashboard() {
           <h1 className="font-display text-2xl">
             Hoi {hero?.display_name ?? 'held'}! <span aria-hidden="true">👋</span>
           </h1>
-          <p className="text-sm text-slate-400">{t('dash.fuelToday')}</p>
+          <div className="mt-0.5 flex items-center gap-2 text-sm font-semibold">
+            <span className="text-gold-400">🪙 {hero?.coins ?? 0}</span>
+            <span className="text-electric-400">⚡ {hero?.game_tokens ?? 0}</span>
+          </div>
         </div>
         <StreakFlame
           streak={hero?.streak_current ?? 0}
@@ -84,7 +89,12 @@ export function HeroDashboard() {
 
       <div className="flex flex-col items-center">
         <div className="flex w-full items-start justify-center gap-1">
-          <HeroAvatar state={state} level={hero?.avatar_level ?? 1} size={150} />
+          <HeroAvatar
+            state={state}
+            level={hero?.avatar_level ?? 1}
+            size={150}
+            gear={parseGear(hero).equipped}
+          />
           <div className="mt-4">
             <SpeechBubble>{STATE_MESSAGES[state]}</SpeechBubble>
           </div>
@@ -93,6 +103,8 @@ export function HeroDashboard() {
           <PowerMeter total={total} limit={limit} size={270} />
         </div>
       </div>
+
+      <MissionsPanel />
 
       <ChallengeCard />
 

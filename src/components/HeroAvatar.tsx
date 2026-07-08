@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import type { Gear } from '@/lib/economy'
 import type { PowerZone } from '@/lib/gamification'
 
 export type AvatarState = 'charging' | PowerZone
@@ -7,6 +8,21 @@ interface Props {
   state: AvatarState
   level: number
   size?: number
+  /** Equipped shop cosmetics (suit color, helmet, cape, pet, aura). */
+  gear?: Gear['equipped']
+}
+
+const SUITS: Record<string, { main: string; dark: string }> = {
+  suit_classic: { main: '#00D4FF', dark: '#00A8CC' },
+  suit_rood: { main: '#FF5A5A', dark: '#C93A3A' },
+  suit_groen: { main: '#35D46A', dark: '#1F9E4B' },
+  suit_zwart: { main: '#4A5568', dark: '#2D3748' },
+}
+
+const CAPES: Record<string, string> = {
+  cape_geel: '#FFD700',
+  cape_rood: '#FF5A5A',
+  cape_sterren: '#3B4C9B',
 }
 
 /**
@@ -15,8 +31,9 @@ interface Props {
  * pose/expression react to today's fuel zone. Over-limit is deliberately
  * gentle: tired, never sad or punishing.
  */
-export function HeroAvatar({ state, level, size = 180 }: Props) {
-  const hasCape = level >= 5
+export function HeroAvatar({ state, level, size = 180, gear }: Props) {
+  const equippedCape = gear?.cape && gear.cape !== 'cape_geel' ? gear.cape : null
+  const hasCape = level >= 5 || equippedCape !== null
   const hasMaskUpgrade = level >= 10
   const hasShieldGear = level >= 15
   const hasArmor = level >= 20
@@ -28,11 +45,19 @@ export function HeroAvatar({ state, level, size = 180 }: Props) {
   const alert = state === 'yellow' || state === 'red'
   const showShield = hasShieldGear || alert
 
-  const suit = cosmic ? '#7B5CFF' : golden ? '#FFD700' : '#00D4FF'
-  const suitDark = cosmic ? '#5A3FD6' : golden ? '#D4AF00' : '#00A8CC'
-  const capeColor = cosmic ? '#B9A6FF' : '#FFD700'
+  const suitChoice = gear?.suit && gear.suit !== 'suit_classic' ? SUITS[gear.suit] : null
+  const suit = suitChoice?.main ?? (cosmic ? '#7B5CFF' : golden ? '#FFD700' : '#00D4FF')
+  const suitDark = suitChoice?.dark ?? (cosmic ? '#5A3FD6' : golden ? '#D4AF00' : '#00A8CC')
+  const capeColor = equippedCape
+    ? CAPES[equippedCape]
+    : cosmic
+      ? '#B9A6FF'
+      : '#FFD700'
   const skin = '#FFD7B8'
-  const emblem = golden && !cosmic ? '#0F1B2D' : '#FFD700'
+  const emblem = golden && !cosmic && !suitChoice ? '#0F1B2D' : '#FFD700'
+  const helmet = gear?.helmet ?? 'helm_klassiek'
+  const aura = gear?.aura ?? null
+  const pet = gear?.pet ?? null
 
   const glow = charging
     ? 'none'
@@ -77,7 +102,42 @@ export function HeroAvatar({ state, level, size = 180 }: Props) {
           </linearGradient>
         </defs>
 
-        {(golden || cosmic) && <circle cx="100" cy="110" r="95" fill="url(#aura)" />}
+        {(golden || cosmic) && aura !== 'aura_geen' && !aura && (
+          <circle cx="100" cy="110" r="95" fill="url(#aura)" />
+        )}
+
+        {/* purchasable auras */}
+        {aura === 'aura_bliksem' && (
+          <g>
+            <motion.circle
+              cx="100" cy="112" r="88" fill="none" stroke="#00D4FF" strokeWidth="2.5"
+              strokeDasharray="14 22" opacity="0.7"
+              animate={{ rotate: 360 }}
+              style={{ transformOrigin: '100px 112px' }}
+              transition={{ duration: 9, repeat: Infinity, ease: 'linear' }}
+            />
+            {[30, 150, 270].map((deg) => (
+              <motion.text
+                key={deg}
+                x={100 + 88 * Math.cos((deg * Math.PI) / 180)}
+                y={116 + 88 * Math.sin((deg * Math.PI) / 180)}
+                fontSize="14" textAnchor="middle"
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.4, repeat: Infinity, delay: deg / 300 }}
+              >
+                ⚡
+              </motion.text>
+            ))}
+          </g>
+        )}
+        {aura === 'aura_vuur' && (
+          <motion.circle
+            cx="100" cy="112" r="86" fill="none" stroke="#FF7A3C" strokeWidth="5"
+            opacity="0.55"
+            animate={{ r: [84, 90, 84], opacity: [0.4, 0.7, 0.4] }}
+            transition={{ duration: 1.8, repeat: Infinity }}
+          />
+        )}
 
         {cosmic && (
           <g fill="#FFE14D">
@@ -108,6 +168,14 @@ export function HeroAvatar({ state, level, size = 180 }: Props) {
             }
             transition={{ duration: 2.4, repeat: state === 'green' ? Infinity : 0 }}
           />
+        )}
+        {/* star sprinkles on the star cape */}
+        {hasCape && equippedCape === 'cape_sterren' && !tired && (
+          <g fill="#FFE14D">
+            {[[52, 130], [66, 160], [140, 145], [128, 172], [45, 168]].map(([x, y]) => (
+              <circle key={`${x}-${y}`} cx={x} cy={y} r="2.4" />
+            ))}
+          </g>
         )}
 
         {/* legs + boots */}
@@ -170,17 +238,48 @@ export function HeroAvatar({ state, level, size = 180 }: Props) {
         {/* hair */}
         <path d="M70 46 Q74 22 100 22 Q126 22 130 46 Q116 34 100 36 Q84 34 70 46 Z" fill="#2B2118" />
 
-        {/* mask — domino (basic) or winged (level 10+) */}
-        {hasMaskUpgrade ? (
-          <path
-            d="M64 48 Q78 40 100 42 Q122 40 136 48 Q136 60 122 62 Q110 63 100 58 Q90 63 78 62 Q64 60 64 48 Z"
-            fill={cosmic ? '#5A3FD6' : '#0F1B2D'} stroke={suit} strokeWidth="2"
-          />
-        ) : (
-          <path
-            d="M72 48 Q100 42 128 48 Q128 58 100 56 Q72 58 72 48 Z"
-            fill="#0F1B2D"
-          />
+        {/* headgear: classic mask (upgrades at level 10) or shop helmets */}
+        {helmet === 'helm_klassiek' &&
+          (hasMaskUpgrade ? (
+            <path
+              d="M64 48 Q78 40 100 42 Q122 40 136 48 Q136 60 122 62 Q110 63 100 58 Q90 63 78 62 Q64 60 64 48 Z"
+              fill={cosmic ? '#5A3FD6' : '#0F1B2D'} stroke={suit} strokeWidth="2"
+            />
+          ) : (
+            <path
+              d="M72 48 Q100 42 128 48 Q128 58 100 56 Q72 58 72 48 Z"
+              fill="#0F1B2D"
+            />
+          ))}
+        {helmet === 'helm_vizier' && (
+          <g>
+            <path d="M68 46 Q100 40 132 46 L132 58 Q100 63 68 58 Z"
+              fill="#0F1B2D" opacity="0.9" />
+            <motion.path
+              d="M70 50 Q100 45 130 50 L130 54 Q100 58 70 54 Z" fill="#00D4FF"
+              animate={{ opacity: [0.6, 1, 0.6] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+          </g>
+        )}
+        {helmet === 'helm_ninja' && (
+          <g>
+            <path d="M66 44 Q100 38 134 44 L134 54 Q100 60 66 54 Z" fill="#1A2333" />
+            <motion.path
+              d="M132 48 Q150 52 156 64 L150 66 Q140 56 130 54 Z" fill="#1A2333"
+              style={{ transformOrigin: '132px 50px' }}
+              animate={{ rotate: [0, 6, 0] }}
+              transition={{ duration: 2.2, repeat: Infinity }}
+            />
+          </g>
+        )}
+        {helmet === 'helm_ruimte' && (
+          <g>
+            <circle cx="100" cy="52" r="42" fill="#7DE9FF" opacity="0.16"
+              stroke="#7DE9FF" strokeWidth="2.5" />
+            <path d="M70 34 Q80 24 96 24" stroke="white" strokeWidth="3"
+              strokeLinecap="round" fill="none" opacity="0.5" />
+          </g>
         )}
 
         {/* eyes */}
@@ -221,6 +320,59 @@ export function HeroAvatar({ state, level, size = 180 }: Props) {
             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 2 }}
             transition={{ duration: 0.8 }}
           />
+        )}
+
+        {/* companion pets */}
+        {pet === 'pet_robo' && (
+          <motion.g
+            animate={{ y: [0, -6, 0] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <rect x="152" y="150" width="30" height="22" rx="9" fill="#8B94A8" />
+            <rect x="158" y="136" width="20" height="16" rx="7" fill="#A8B2C4" />
+            <rect x="161" y="141" width="14" height="5" rx="2.5" fill="#00D4FF" />
+            <line x1="168" y1="136" x2="168" y2="129" stroke="#8B94A8" strokeWidth="2" />
+            <circle cx="168" cy="127.5" r="2.5" fill="#FF5A5A" />
+            <rect x="155" y="170" width="7" height="6" rx="3" fill="#6B7488" />
+            <rect x="172" y="170" width="7" height="6" rx="3" fill="#6B7488" />
+          </motion.g>
+        )}
+        {pet === 'pet_draak' && (
+          <motion.g
+            animate={{ y: [0, -7, 0] }}
+            transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <ellipse cx="166" cy="156" rx="16" ry="13" fill="#35D46A" />
+            <circle cx="174" cy="146" r="9" fill="#4AE07C" />
+            <circle cx="177" cy="144" r="2" fill="#0F1B2D" />
+            <motion.path
+              d="M154 150 Q144 140 150 132 Q158 138 158 148 Z" fill="#4AE07C"
+              style={{ transformOrigin: '156px 148px' }}
+              animate={{ rotate: [0, 14, 0] }}
+              transition={{ duration: 0.7, repeat: Infinity }}
+            />
+            <motion.path
+              d="M183 148 L190 146 L186 151 Z" fill="#FF7A3C"
+              animate={{ opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 0.9, repeat: Infinity }}
+            />
+          </motion.g>
+        )}
+        {pet === 'pet_uil' && (
+          <motion.g
+            animate={{ y: [0, -5, 0] }}
+            transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <ellipse cx="166" cy="152" rx="14" ry="17" fill="#9A6B3F" />
+            <path d="M156 138 L160 130 L164 138 Z" fill="#9A6B3F" />
+            <path d="M168 138 L172 130 L176 138 Z" fill="#9A6B3F" />
+            <circle cx="160" cy="146" r="5.5" fill="white" />
+            <circle cx="172" cy="146" r="5.5" fill="white" />
+            <circle cx="161" cy="147" r="2.5" fill="#0F1B2D" />
+            <circle cx="171" cy="147" r="2.5" fill="#0F1B2D" />
+            <path d="M164 154 L166 158 L168 154 Z" fill="#FFB020" />
+            <ellipse cx="166" cy="163" rx="8" ry="4" fill="#B8865A" />
+          </motion.g>
         )}
       </svg>
 

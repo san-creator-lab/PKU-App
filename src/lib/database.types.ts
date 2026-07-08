@@ -205,10 +205,13 @@ export type Database = {
       profiles: {
         Row: {
           avatar_level: number
+          coins: number
           created_at: string
           daily_protein_limit: number
           display_name: string
           family_id: string | null
+          game_tokens: number
+          gear: Json
           id: string
           language: string
           role: Database['public']['Enums']['user_role']
@@ -222,10 +225,13 @@ export type Database = {
         }
         Insert: {
           avatar_level?: number
+          coins?: number
           created_at?: string
           daily_protein_limit?: number
           display_name?: string
           family_id?: string | null
+          game_tokens?: number
+          gear?: Json
           id: string
           language?: string
           role?: Database['public']['Enums']['user_role']
@@ -239,10 +245,13 @@ export type Database = {
         }
         Update: {
           avatar_level?: number
+          coins?: number
           created_at?: string
           daily_protein_limit?: number
           display_name?: string
           family_id?: string | null
+          game_tokens?: number
+          gear?: Json
           id?: string
           language?: string
           role?: Database['public']['Enums']['user_role']

@@ -17,6 +17,19 @@ import type {
 } from '@/lib/backend'
 import { addDays, todayISO, weekStartISO } from '@/lib/dates'
 import {
+  coinsForScore,
+  COINS,
+  MAX_SHIELDS,
+  MAX_TOKENS,
+  parseGear,
+  randomUnownedItem,
+  shopItem,
+  streakMultiplier,
+  type Gear,
+  type GearSlot,
+  type ShopItem,
+} from '@/lib/economy'
+import {
   badgeDef,
   challengeDef,
   challengeForWeek,
@@ -27,7 +40,9 @@ import {
   type BadgeDef,
 } from '@/lib/gamification'
 import { getLang, setLang, type Lang } from '@/lib/i18n'
+import { missionStates } from '@/lib/missions'
 import { enqueue, flush, isNetworkError, pendingCount } from '@/lib/outbox'
+import { sfx } from '@/lib/sfx'
 
 const ENTRY_WINDOW_DAYS = 60
 const MAX_CATCHUP_DAYS = 30
@@ -89,6 +104,18 @@ interface AppState {
   refreshOutbox(): Promise<void>
   /** Re-fetch all family data (pull-to-refresh). */
   refresh(): Promise<void>
+
+  // -- hero economy (coins / tokens / gear / missions / arcade) ----------
+  claimMission(missionId: string): Promise<void>
+  /** Opens the daily bonus chest; null when not available. */
+  openChest(): Promise<{ coins: number; item: ShopItem | null } | null>
+  buyItem(itemId: string): Promise<boolean>
+  equipItem(slot: GearSlot, itemId: string): Promise<void>
+  buyShield(): Promise<boolean>
+  /** Spends a game token; false when the hero has none. */
+  startGame(): Promise<boolean>
+  /** Awards coins/XP for a finished run; returns the coins earned. */
+  finishGame(score: number): Promise<number>
 }
 
 let unsubscribeRealtime: (() => void) | null = null
@@ -167,21 +194,72 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
-  async function awardXpToHero(amount: number): Promise<void> {
+  /**
+   * One write for any combination of hero rewards: XP (with level-up
+   * detection → +coins, celebration, level badges), coins (tracked in
+   * gear.stats for the saver badge), game tokens (capped) and a gear
+   * mutation. Everything lands on the hero profile in a single
+   * safeUpdateProfile, so offline/outbox and realtime stay simple.
+   */
+  async function applyHeroDelta(delta: {
+    xp?: number
+    coins?: number
+    tokens?: number
+    gear?: (gear: Gear) => Gear
+    sound?: () => void
+  }): Promise<void> {
     const state = get()
     const hero = heroProfileOf(state)
     if (!hero) return
-    const newXp = hero.xp + amount
-    const oldLevel = levelForXp(hero.xp)
-    const newLevel = levelForXp(newXp)
-    const patch: Partial<Profile> = { xp: newXp, avatar_level: newLevel }
+
+    const patch: Partial<Profile> = {}
+    let leveledTo: number | null = null
+    if (delta.xp) {
+      const newXp = hero.xp + delta.xp
+      const newLevel = levelForXp(newXp)
+      patch.xp = newXp
+      patch.avatar_level = newLevel
+      if (newLevel > levelForXp(hero.xp)) leveledTo = newLevel
+    }
+
+    let coins = delta.coins ?? 0
+    if (leveledTo) coins += COINS.LEVEL_UP
+    if (coins !== 0) patch.coins = Math.max(0, (hero.coins ?? 0) + coins)
+    if (delta.tokens) {
+      patch.game_tokens = Math.min(
+        MAX_TOKENS,
+        Math.max(0, (hero.game_tokens ?? 0) + delta.tokens),
+      )
+    }
+
+    let earnedTotal: number | null = null
+    if (delta.gear || coins > 0) {
+      let gear = parseGear(hero)
+      if (delta.gear) gear = delta.gear(gear)
+      if (coins > 0) {
+        gear = {
+          ...gear,
+          stats: { ...gear.stats, coinsEarned: gear.stats.coinsEarned + coins },
+        }
+        earnedTotal = gear.stats.coinsEarned
+      }
+      patch.gear = gear as unknown as Profile['gear']
+    }
+
     await safeUpdateProfile(hero.id, patch)
-    if (newLevel > oldLevel) {
+    delta.sound?.()
+
+    if (leveledTo) {
       set({ celebration: 'levelup' })
-      const levelBadge = [5, 10, 20].includes(newLevel) ? `level_${newLevel}` : null
+      sfx.fanfare()
+      const levelBadge = [5, 10, 20].includes(leveledTo) ? `level_${leveledTo}` : null
       if (levelBadge) await grantBadge(hero.id, levelBadge)
     }
+    if (earnedTotal !== null && earnedTotal >= 500) {
+      await grantBadge(hero.id, 'rich_500')
+    }
   }
+
 
   async function grantBadge(profileId: string, type: string): Promise<void> {
     try {
@@ -236,6 +314,7 @@ export const useAppStore = create<AppState>((set, get) => {
     let shields = hero.streak_shields
     let lastEvaluated = hero.streak_last_date
     let xpEarned = 0
+    let coinsEarned = 0
     const milestonesHit: string[] = []
 
     let cursor = lastEvaluated
@@ -253,11 +332,14 @@ export const useAppStore = create<AppState>((set, get) => {
       if (hasEntries && total <= Number(hero.daily_protein_limit)) {
         streak += 1
         best = Math.max(best, streak)
-        xpEarned += XP.UNDER_LIMIT_DAY
+        // streaks multiply the daily XP: ×1.5 from 7 days, ×2 from 30
+        xpEarned += Math.round(XP.UNDER_LIMIT_DAY * streakMultiplier(streak))
+        coinsEarned += COINS.GREEN_DAY
         const badge = streakBadgeType(streak)
         if (badge) {
           milestonesHit.push(badge)
           xpEarned += XP.STREAK_MILESTONE
+          coinsEarned += COINS.STREAK_MILESTONE
         }
       } else if (shields > 0) {
         shields -= 1 // streak survives behind the shield
@@ -283,6 +365,7 @@ export const useAppStore = create<AppState>((set, get) => {
       lastEvaluated !== hero.streak_last_date ||
       shieldsRefilledOn !== hero.shields_refilled_on
     if (changed) {
+      const gear = parseGear(hero)
       await safeUpdateProfile(hero.id, {
         streak_current: streak,
         streak_best: best,
@@ -291,6 +374,11 @@ export const useAppStore = create<AppState>((set, get) => {
         shields_refilled_on: shieldsRefilledOn,
         xp: hero.xp + xpEarned,
         avatar_level: levelForXp(hero.xp + xpEarned),
+        coins: Math.max(0, (hero.coins ?? 0) + coinsEarned),
+        gear: {
+          ...gear,
+          stats: { ...gear.stats, coinsEarned: gear.stats.coinsEarned + coinsEarned },
+        } as unknown as Profile['gear'],
       })
       for (const badge of milestonesHit) await grantBadge(hero.id, badge)
       await checkPerfectWeek()
@@ -527,7 +615,12 @@ export const useAppStore = create<AppState>((set, get) => {
 
       // -- gamification side effects (hero-centric) --
       const hero = heroProfileOf(get())
-      await awardXpToHero(input.source === 'scan' ? XP.LOG_MEAL + XP.SCAN_LABEL : XP.LOG_MEAL)
+      // every logged meal powers the hero AND charges the arcade: +1 token
+      await applyHeroDelta({
+        xp: input.source === 'scan' ? XP.LOG_MEAL + XP.SCAN_LABEL : XP.LOG_MEAL,
+        tokens: 1,
+        sound: sfx.whoosh,
+      })
       if (hero) {
         if (isFirstEntry) await grantBadge(hero.id, 'first_mission')
         if (me.role === 'sidekick' && hero.id !== me.id) {
@@ -619,6 +712,141 @@ export const useAppStore = create<AppState>((set, get) => {
         set({ myProfile: profile })
         await loadFamilyData(profile)
       }
+    },
+
+    // -- hero economy -------------------------------------------------------
+
+    async claimMission(missionId) {
+      const state = get()
+      const hero = heroProfileOf(state)
+      if (!hero) return
+      const gear = parseGear(hero)
+      const today = todayISO()
+      const states = missionStates(today, {
+        entries: state.entries.filter((e) => e.date === today),
+        heroId: hero.id,
+        gear,
+      })
+      const mission = states.find((m) => m.id === missionId)
+      if (!mission || !mission.completed || mission.claimed) return
+      await applyHeroDelta({
+        xp: 10,
+        coins: COINS.MISSION,
+        gear: (g) => ({
+          ...g,
+          daily: { ...g.daily, claimed: [...g.daily.claimed, missionId] },
+        }),
+        sound: sfx.claim,
+      })
+    },
+
+    async openChest() {
+      const state = get()
+      const hero = heroProfileOf(state)
+      if (!hero) return null
+      const gear = parseGear(hero)
+      const today = todayISO()
+      const states = missionStates(today, {
+        entries: state.entries.filter((e) => e.date === today),
+        heroId: hero.id,
+        gear,
+      })
+      if (gear.daily.chestOpened || !states.every((m) => m.claimed)) return null
+
+      const item = Math.random() < 0.25 ? randomUnownedItem(gear, Math.random()) : null
+      const coins = COINS.CHEST + (item ? 0 : COINS.CHEST_DUPLICATE_BONUS)
+      const newAllDailies = gear.stats.allDailiesCount + 1
+
+      await applyHeroDelta({
+        coins,
+        gear: (g) => ({
+          ...g,
+          owned: item ? [...g.owned, item.id] : g.owned,
+          daily: { ...g.daily, chestOpened: true },
+          stats: { ...g.stats, allDailiesCount: newAllDailies },
+        }),
+        sound: sfx.chest,
+      })
+      set({ celebration: 'confetti' })
+      if (newAllDailies >= 5) await grantBadge(hero.id, 'missions_5')
+      return { coins, item }
+    },
+
+    async buyItem(itemId) {
+      const state = get()
+      const hero = heroProfileOf(state)
+      const item = shopItem(itemId)
+      if (!hero || !item || item.free) return false
+      const gear = parseGear(hero)
+      if (gear.owned.includes(itemId) || (hero.coins ?? 0) < item.price) return false
+      await applyHeroDelta({
+        coins: -item.price,
+        gear: (g) => ({
+          ...g,
+          owned: [...g.owned, itemId],
+          equipped: { ...g.equipped, [item.slot]: itemId },
+        }),
+        sound: sfx.coin,
+      })
+      await grantBadge(hero.id, 'shopper')
+      return true
+    },
+
+    async equipItem(slot, itemId) {
+      await applyHeroDelta({
+        gear: (g) => ({ ...g, equipped: { ...g.equipped, [slot]: itemId } }),
+        sound: sfx.pop,
+      })
+    },
+
+    async buyShield() {
+      const state = get()
+      const hero = heroProfileOf(state)
+      if (!hero) return false
+      if ((hero.coins ?? 0) < COINS.SHIELD_PRICE || hero.streak_shields >= MAX_SHIELDS) {
+        return false
+      }
+      await safeUpdateProfile(hero.id, {
+        coins: (hero.coins ?? 0) - COINS.SHIELD_PRICE,
+        streak_shields: hero.streak_shields + 1,
+      })
+      sfx.claim()
+      return true
+    },
+
+    async startGame() {
+      const state = get()
+      const hero = heroProfileOf(state)
+      if (!hero || (hero.game_tokens ?? 0) < 1) return false
+      await applyHeroDelta({
+        tokens: -1,
+        gear: (g) => ({
+          ...g,
+          daily: { ...g.daily, gamesPlayed: g.daily.gamesPlayed + 1 },
+        }),
+        sound: sfx.pop,
+      })
+      await grantBadge(hero.id, 'gamer_first')
+      return true
+    },
+
+    async finishGame(score) {
+      const state = get()
+      const hero = heroProfileOf(state)
+      if (!hero) return 0
+      const coins = coinsForScore(score)
+      await applyHeroDelta({
+        xp: 10,
+        coins,
+        gear: (g) => ({
+          ...g,
+          stats: { ...g.stats, hiscore: Math.max(g.stats.hiscore, score) },
+        }),
+        sound: sfx.coin,
+      })
+      if (score >= 100) await grantBadge(hero.id, 'gamer_100')
+      if (score >= 250) await grantBadge(hero.id, 'gamer_250')
+      return coins
     },
   }
 })

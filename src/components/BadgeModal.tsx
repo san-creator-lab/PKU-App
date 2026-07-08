@@ -19,6 +19,7 @@ export function BadgeModal({ badge, onClose }: Props) {
           role="dialog"
           aria-modal="true"
           aria-label={`Nieuwe badge: ${badge.name}`}
+          onClick={onClose}
         >
           <motion.div
             className="relative w-full max-w-sm rounded-card border-2 border-gold-500/60 bg-navy-800 p-8 text-center shadow-glow-gold"
@@ -26,6 +27,7 @@ export function BadgeModal({ badge, onClose }: Props) {
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.8, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* POW! star burst */}
             <motion.div

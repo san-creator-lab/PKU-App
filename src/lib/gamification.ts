@@ -162,6 +162,42 @@ export const BADGES: BadgeDef[] = [
     name: 'Volledig pantser',
     description: 'Bereik level 20: power-pantser compleet',
   },
+  {
+    type: 'gamer_first',
+    emoji: '🎮',
+    name: 'Eerste vlucht',
+    description: 'Speel je eerste potje Fuel Rush',
+  },
+  {
+    type: 'gamer_100',
+    emoji: '🕹️',
+    name: 'Sky-held',
+    description: 'Haal 100 punten in Fuel Rush',
+  },
+  {
+    type: 'gamer_250',
+    emoji: '👾',
+    name: 'Arcade-legende',
+    description: 'Haal 250 punten in Fuel Rush',
+  },
+  {
+    type: 'shopper',
+    emoji: '🛍️',
+    name: 'Eerste upgrade',
+    description: 'Koop je eerste item in de heldenwinkel',
+  },
+  {
+    type: 'missions_5',
+    emoji: '🎯',
+    name: 'Missie-machine',
+    description: 'Voltooi 5 keer alle dagmissies',
+  },
+  {
+    type: 'rich_500',
+    emoji: '🪙',
+    name: 'Spaarheld',
+    description: 'Verdien in totaal 500 munten',
+  },
 ]
 
 export function badgeDef(type: string): BadgeDef {

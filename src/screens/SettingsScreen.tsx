@@ -6,6 +6,7 @@ import { backend } from '@/lib/backend'
 import { entriesToCsv, downloadCsv } from '@/lib/csv'
 import { addDays, todayISO } from '@/lib/dates'
 import { t, type Lang } from '@/lib/i18n'
+import { setSoundEnabled, sfx, soundEnabled } from '@/lib/sfx'
 
 export function SettingsScreen() {
   const myProfile = useAppStore((s) => s.myProfile)
@@ -25,6 +26,7 @@ export function SettingsScreen() {
 
   const [name, setName] = useState(myProfile?.display_name ?? '')
   const [alerts, setAlerts] = useState(getAlertPrefs())
+  const [sound, setSound] = useState(soundEnabled())
   const [exporting, setExporting] = useState(false)
 
   async function adjustLimit(delta: number) {
@@ -152,6 +154,18 @@ export function SettingsScreen() {
           label={t('settings.largeText')}
           checked={largeText}
           onChange={() => setLargeText(!largeText)}
+        />
+
+        <ToggleRow
+          id="s-sound"
+          label="Geluidjes (munten, missies, arcade)"
+          checked={sound}
+          onChange={() => {
+            const next = !sound
+            setSoundEnabled(next)
+            setSound(next)
+            if (next) sfx.coin()
+          }}
         />
 
         <h3 className="mt-1 text-sm font-semibold text-slate-300">

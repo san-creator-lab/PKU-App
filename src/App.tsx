@@ -23,6 +23,12 @@ const HistoryScreen = lazy(() =>
 const SettingsScreen = lazy(() =>
   import('@/screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen })),
 )
+const GameScreen = lazy(() =>
+  import('@/screens/GameScreen').then((m) => ({ default: m.GameScreen })),
+)
+const ShopScreen = lazy(() =>
+  import('@/screens/ShopScreen').then((m) => ({ default: m.ShopScreen })),
+)
 
 function Splash() {
   return (
@@ -51,12 +57,14 @@ export default function App() {
       <Suspense fallback={<Splash />}>
         <Routes>
           <Route path="/scan" element={<ScannerScreen />} />
+          <Route path="/game" element={<GameScreen />} />
           <Route element={<AppShell />}>
             <Route index element={<HeroDashboard />} />
             <Route path="/add" element={<AddFoodScreen />} />
             <Route path="/library" element={<LibraryScreen />} />
             <Route path="/badges" element={<BadgeHallScreen />} />
             <Route path="/avatar" element={<AvatarRoomScreen />} />
+            <Route path="/shop" element={<ShopScreen />} />
             <Route path="/hq" element={<SidekickDashboard />} />
             <Route path="/hq/history" element={<HistoryScreen />} />
             <Route path="/settings" element={<SettingsScreen />} />

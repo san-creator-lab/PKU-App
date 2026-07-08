@@ -97,6 +97,16 @@ export class LocalBackend implements Backend {
     return (JSON.parse(raw) as SessionInfo).userId
   }
 
+  /** Fill economy fields on profiles created before the hero_economy migration. */
+  private withDefaults(profile: Profile): Profile {
+    return {
+      ...profile,
+      coins: profile.coins ?? 0,
+      game_tokens: profile.game_tokens ?? 3,
+      gear: profile.gear ?? {},
+    }
+  }
+
   private async requireProfile(): Promise<Profile> {
     const db = await this.db()
     const profile = await db.get('profiles', this.currentUserId())
@@ -145,6 +155,9 @@ export class LocalBackend implements Backend {
       streak_last_date: null,
       shields_refilled_on: null,
       language: input.language ?? 'nl',
+      coins: 0,
+      game_tokens: 3,
+      gear: {},
       created_at: now(),
       updated_at: now(),
     }
@@ -213,7 +226,8 @@ export class LocalBackend implements Backend {
   async getMyProfile(): Promise<Profile | null> {
     try {
       const db = await this.db()
-      return (await db.get('profiles', this.currentUserId())) ?? null
+      const profile = await db.get('profiles', this.currentUserId())
+      return profile ? this.withDefaults(profile) : null
     } catch {
       return null
     }
@@ -222,15 +236,21 @@ export class LocalBackend implements Backend {
   async listFamilyProfiles(): Promise<Profile[]> {
     const db = await this.db()
     const me = await this.requireProfile()
-    if (!me.family_id) return [me]
-    return db.getAllFromIndex('profiles', 'by-family', me.family_id)
+    if (!me.family_id) return [this.withDefaults(me)]
+    const all = await db.getAllFromIndex('profiles', 'by-family', me.family_id)
+    return all.map((p) => this.withDefaults(p))
   }
 
   async updateProfile(id: string, patch: Partial<Profile>): Promise<Profile> {
     const db = await this.db()
     const existing = await db.get('profiles', id)
     if (!existing) throw new Error('profile_missing')
-    const updated = { ...existing, ...patch, id, updated_at: now() }
+    const updated = {
+      ...this.withDefaults(existing),
+      ...patch,
+      id,
+      updated_at: now(),
+    }
     await db.put('profiles', updated)
     this.emit(updated.family_id, { table: 'profiles', type: 'UPDATE', row: updated })
     return updated

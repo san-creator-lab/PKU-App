@@ -26,7 +26,8 @@ Mobile-first PWA that tracks daily protein ("fuel") intake for a child (8) with 
 - Mobile-first: design at a 390px viewport, touch targets ≥ 48px
 - UI copy in Dutch (informal "jij/je"); code, comments and commit messages in English
 - The child-facing UI never says "protein/eiwit" — it says "fuel" (brandstof). Parent-facing (Sidekick HQ) screens may show gram values with the word "eiwit" since parents talk to dietitians
-- Tone: always encouraging, never punishing. Going over the limit gets a gentle, hopeful message
+- Tone: always encouraging, never punishing. Going over the limit gets a gentle, hopeful message. The arcade game uses neutral obstacles (meteors) — never "bad foods"
+- All hero rewards (XP, coins, game tokens, gear) go through `applyHeroDelta` in `useAppStore` — one profile write per action. Economy/shop rules live in `src/lib/economy.ts`, daily missions in `src/lib/missions.ts` (deterministic per date, always completable, no storage beyond the `gear` jsonb bag)
 - Theme tokens live in `tailwind.config.js`: navy `#0F1B2D` background, electric blue `#00D4FF`, gold `#FFD700`, hero-red `#FF3B3B` (warnings only). Dark mode is the default and only theme (V1)
 - All visual assets (avatar, badges, icons) are generated SVG/canvas — no external assets, no stock images
 - Never block on external services: everything upgradeable (Supabase, OCR) sits behind an adapter interface with a keyless local default

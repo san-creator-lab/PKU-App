@@ -9,6 +9,15 @@ Dutch UI (informal), dark "hero lair" theme, designed at 390 px.
 
 The child-facing UI never says "eiwit/protein" — it says **brandstof (fuel)**.
 
+Built for a 9–12 year old who has to *want* to open it: on top of the base
+game loop (XP, levels, evolving avatar, streaks + shields, badges, weekly
+challenge) sits a full reward economy — **daily missions** with tap-to-claim
+coins and a bonus chest, a **coin shop** with suits/helmets/capes/pets/auras
+rendered live on the avatar, the **Fuel Rush** arcade mini-game (plays cost
+tokens that you earn by logging fuel), a **streak calendar with XP
+multipliers** (×1.5 at 7 days, ×2 at 30), buyable extra streak shields, and
+chiptune sound effects.
+
 ## Quick start (zero setup)
 
 ```bash
@@ -40,6 +49,7 @@ Verification scripts (Playwright, expects `npm run dev` on :5173 unless noted):
 node scripts/verify-flow.mjs      # onboarding, logging, join, realtime (2 sessions)
 node scripts/verify-scanner.mjs   # OCR happy path + low-confidence fallback
 node scripts/verify-hq.mjs        # HQ, charts, history, settings, CSV, streak engine
+node scripts/verify-game.mjs      # missions, chest, coins, arcade, shop buy/equip
 node scripts/verify-pwa.mjs http://localhost:4173   # PWA/offline (run preview first)
 node scripts/shoot-all.mjs        # screenshot every screen at 390px
 ```
@@ -232,8 +242,43 @@ scripts/        db harness + RLS proof, OCR assets, icons, verify-* suites
   only for the HQ route and Tesseract only in the scanner; damped springs;
   `prefers-reduced-motion` respected globally.
 - **Verification is scripted** (Playwright against the preinstalled
-  Chromium): four suites cover onboarding→realtime, OCR both paths, HQ/CSV/
-  streak engine, and PWA/offline — 38 checks total, all green at ship time.
+  Chromium): five suites cover onboarding→realtime, OCR both paths, HQ/CSV/
+  streak engine, missions/economy/arcade/shop, and PWA/offline — 51 checks
+  total, all green at ship time.
+
+### Decisions — reward economy (gamification 2.0)
+
+- **One migration, existing tables.** The whole economy lives on `profiles`
+  (`coins`, `game_tokens`, `gear jsonb`) so family RLS and the realtime
+  publication cover it unchanged; badges reuse the generic `badges` table.
+  The `gear` bag holds owned/equipped cosmetics, the daily
+  claims/chest/games-played state (auto-resets per day) and lifetime stats.
+- **Every reward flows through one code path** (`applyHeroDelta` in the
+  store): XP with level-up detection, coins (tracked for the saver badge),
+  capped tokens, and a gear mutation — one profile write per action, which
+  keeps offline/outbox and cross-device sync simple. Concurrent claims from
+  two devices can double-award under last-write-wins; acceptable at family
+  scale.
+- **The arcade feeds the core loop instead of competing with it:** a Fuel
+  Rush run costs one ⚡token and tokens are earned by logging fuel (1 per
+  logged meal, max 5). No tokens → friendly nudge to log. Coin payout per
+  run is capped (25) so grinding the game is never better than real
+  missions.
+- **Fuel Rush obstacles are neutral meteors, not "bad foods"** — the game
+  never frames high-protein food as evil (tone rule: encourage, don't
+  shame). Score = catching bolts/stars/power-fruit with a combo multiplier;
+  losing is soft (shields, gentle thud, instant retry).
+- **Daily missions are deterministic per date** (same trio on every device,
+  no storage needed — completion is derived from today's entries) and are
+  always completable at any hour; claims persist in the gear bag. Claiming
+  all three unlocks a bonus chest: coins + a 25% chance at a random unowned
+  cosmetic.
+- **Coin sinks:** cosmetics (80–300) and an extra streak shield (150, max
+  2 shields) so savings stay meaningful next to the Monday shield refill.
+- **Streak multiplier** (×1.5 from 7 days, ×2 from 30) applies to the daily
+  under-budget XP — streaks accelerate leveling, which unlocks gear tiers.
+- **Sounds are a ~100-line WebAudio synth** (no audio assets), default on,
+  toggle in Settings; failures are swallowed silently (audio is garnish).
 
 ## Known limitations (V1)
 

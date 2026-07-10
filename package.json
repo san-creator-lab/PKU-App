@@ -1,8 +1,11 @@
 {
   "name": "hero-fuel",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "predev": "node scripts/copy-ocr-assets.mjs",
     "dev": "vite",
@@ -12,6 +15,7 @@
     "preview": "vite preview",
     "icons": "node scripts/generate-icons.mjs",
     "gen:foods": "node scripts/gen-seed-foods.mjs",
+    "gen:sql": "node scripts/combine-migrations.mjs",
     "db:test": "bash scripts/db-test.sh"
   },
   "dependencies": {

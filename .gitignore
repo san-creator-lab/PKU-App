@@ -11,3 +11,4 @@ test-results
 public/tesseract
 public/tessdata
 dist-artifact
+dist-smoke

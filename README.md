@@ -54,6 +54,15 @@ node scripts/verify-pwa.mjs http://localhost:4173   # PWA/offline (run preview f
 node scripts/shoot-all.mjs        # screenshot every screen at 390px
 ```
 
+## Going live (Supabase + Vercel)
+
+**➡️ Follow [`docs/deploy.md`](docs/deploy.md)** — a ±15-minute Dutch
+runbook: create the Supabase project, paste
+[`docs/setup/all-migrations.sql`](docs/setup/all-migrations.sql) into the SQL
+editor (no CLI needed), flip one auth toggle, import the repo in Vercel with
+two env vars, and connect the family's phones. `vercel.json` (build, caching
+and service-worker headers) is already in the repo.
+
 ## Supabase setup
 
 The schema lives **exclusively** in `supabase/migrations/` — tables, RLS
